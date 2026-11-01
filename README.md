@@ -1,102 +1,102 @@
-# 🦾 ARMageddon
+# ARMageddon
 
-> Обратная кинематика для 6-осевой роборуки **с нуля**. Без ikpy, без готовых солверов, без «ну там в ROS есть функция».
-> Только NumPy, линал и лёгкая доля страданий.
+> Inverse kinematics for a 6-DoF robot arm, **from scratch**. No ikpy, no off-the-shelf solvers, no "there's a function for that in ROS".
+> Just NumPy, linear algebra and a healthy amount of suffering.
 
 ![demo](assets/demo.gif)
 
-*Рука ведёт цель по восьмёрке, IK решается каждый кадр заново. Ошибка в тысячных долях миллиметра, решение ≈0.7 мс. Это не монтаж, это якобиан.*
+*The arm chases a target along a figure-eight, re-solving IK every single frame. Error in the thousandths of a millimeter, ~0.7 ms per solve. Not edited. That's just the Jacobian doing its thing.*
 
 ---
 
-## TL;DR для тех, у кого клиповое мышление
+## TL;DR
 
-- 🧮 **Прямая кинематика, якобиан и 3 IK-солвера** на чистом NumPy. MuJoCo нужен только для физики и красивой картинки.
-- ✅ **Математика совпадает с MuJoCo до 1e-9** на случайных конфигурациях. Тесты это проверяют, на слово верить не надо.
-- 🎯 **99.6% успеха** на 500 случайных 6D-позах (позиция + ориентация).
-- ⚙️ **Настоящая физика**: в интерактивном режиме рука двигается моторами с гравитацией, а не телепортируется.
-- 🧪 **75 тестов**, бенчмарк и график сходимости. Всё воспроизводится одной командой.
+- **Forward kinematics, the Jacobian and 3 IK solvers** in pure NumPy. MuJoCo is only there for physics and the pretty pictures.
+- **The math matches MuJoCo to 1e-9** on random configurations. You don't have to take my word for it, the tests check it.
+- **99.6% success** on 500 random 6D poses (position + orientation).
+- **Real physics**: in interactive mode the arm is moved by motors under gravity. No teleporting.
+- **75 tests**, a benchmark and a convergence plot. Everything reproduces with one command.
 
-## Чё это вообще такое
+## What even is this
 
-У роборуки есть суставы. Повернул суставы, и кончик руки (end-effector) куда-то приехал.
+A robot arm has joints. Rotate the joints and the tip of the arm (the end effector) ends up somewhere.
 
-- **Прямая кинематика (FK)**: «вот углы, где кончик руки?» Это изи, перемножаешь повороты по цепочке и готово.
-- **Обратная кинематика (IK)**: «хочу кончик *вот сюда* и повёрнутым *вот так*, какие нужны углы?» Вот тут начинается скилл-ишью. Аналитической формулы в общем случае нет, решений может быть несколько, ноль или бесконечно много, а ещё у суставов есть пределы.
+- **Forward kinematics (FK)**: "here are the joint angles, where's the tip?" Easy. Chain the rotations together and you're done.
+- **Inverse kinematics (IK)**: "I want the tip *right here*, rotated *like this*. What angles get me there?" This is where it becomes a skill issue. There's no closed-form answer in general, there can be several solutions, zero, or infinitely many, and on top of that every joint has limits.
 
-Без IK робот не может ни взять кружку, ни нажать кнопку, ни ассистировать хирургу. Это база physical AI, на которой стоит всё остальное: и imitation learning, и VLA-модели, и «робот, принеси пивас» (сок, конечно же, сок).
+Without IK a robot can't grab a mug, press a button or assist a surgeon. It's the foundation of physical AI that everything else sits on: imitation learning, VLA models, and "robot, fetch me a drink" (juice, obviously).
 
-## Как это работает (матеша без кринжа)
+## How it works (the math, no cap)
 
-**1. Прямая кинематика.** Идём от основания к кончику и копим поворот $R$ и позицию $p$:
+**1. Forward kinematics.** Walk from the base to the tip, accumulating rotation $R$ and position $p$:
 
 $$p_i = p_{i-1} + R_{i-1}\,o_i, \qquad R_i = R_{i-1}\,\mathrm{Rot}(a_i, q_i)$$
 
-Здесь $o_i$ — смещение сустава, $a_i$ — его ось, $\mathrm{Rot}$ — формула Родрига. Всё, это весь FK.
+where $o_i$ is the joint offset, $a_i$ its axis, and $\mathrm{Rot}$ is Rodrigues' formula. That's the whole FK.
 
-**2. Якобиан.** Показывает, куда поедет кончик, если чуть-чуть крутануть каждый сустав. Для вращательного сустава с мировой осью $z_i$ в точке $p_i$:
+**2. The Jacobian.** Tells you where the tip moves if you nudge each joint a tiny bit. For a revolute joint with world axis $z_i$ at point $p_i$:
 
 $$J_i = \begin{bmatrix} z_i \times (p_{ee} - p_i) \\ z_i \end{bmatrix}$$
 
-Тесты сверяют его и с MuJoCo (`mj_jacSite`), и с конечными разностями. Совпадает, мы проверили. Три раза. Ладно, 26 раз.
+The tests check it against both MuJoCo (`mj_jacSite`) and finite differences. It matches. We checked three times. Okay, 26 times.
 
-**3. Ошибка позы.** Позиция — просто разница векторов. С ориентацией хитрее: вычитать матрицы нельзя, поэтому берётся логарифмическое отображение SO(3) $\log(R_{target} R^\top)$, то есть вектор «вокруг какой оси и на сколько докрутить». Ручная реализация не ломается даже около поворота на 180°, где наивная формула делит на ноль.
+**3. Pose error.** Position is just a vector difference. Orientation is trickier: you can't subtract rotation matrices, so we use the SO(3) log map $\log(R_{target} R^\top)$, i.e. "which axis to turn around, and by how much". The hand-rolled version stays stable even near 180-degree rotations, where the naive formula divides by zero.
 
-**4. Шаг солвера.** Решаем $J\,\Delta q \approx e$. Три способа, от бумера до зумера:
+**4. The solver step.** Solve $J\,\Delta q \approx e$. Three ways to do it, from boomer to zoomer:
 
-| Метод | Формула | Вайб |
+| Method | Formula | Vibe |
 |---|---|---|
-| Jacobian transpose | $\Delta q = \alpha J^\top e$ | Дешёвый, но ползёт как улитка 🐌 |
-| Pseudo-inverse | $\Delta q = J^{+} e$ | Быстрый, но около сингулярностей дёргается |
-| **DLS / Levenberg–Marquardt** | $\Delta q = J^\top (J J^\top + \lambda^2 I)^{-1} e$ | Быстрый и не психует. Наш выбор 💅 |
+| Jacobian transpose | $\Delta q = \alpha J^\top e$ | Cheap, but crawls like a snail |
+| Pseudo-inverse | $\Delta q = J^{+} e$ | Fast, but twitchy near singularities |
+| **DLS / Levenberg-Marquardt** | $\Delta q = J^\top (J J^\top + \lambda^2 I)^{-1} e$ | Fast and doesn't freak out. Our pick |
 
-**5. Фишки поверх DLS, которые делают его имбой:**
+**5. The extras on top of DLS that make it actually good:**
 
-- **Адаптивное демпфирование.** Шаг уменьшил ошибку → $\lambda$ вниз, действуем смелее. Не уменьшил → откат и $\lambda$ вверх. Классический LM.
-- **Пределы суставов через active set.** Если сустав упирается в лимит, он замораживается на этот шаг, а остальные пересчитывают задачу. Обычное обрезание (`clip`) молча съедает прогресс, и солвер залипает. Мы на этом реально залипли, пока не пофиксили, хе-хе.
-- **Детектор застоя и рестарты.** Если за 25 итераций ошибка упала меньше чем на 1%, это локальный минимум, и мы стартуем заново со случайной конфигурации. Детектор ускорил солвер в ~2.3 раза без потери точности.
-- **Null space.** У руки 6 суставов, а лишние степени свободы можно потратить на вторичную цель («держись поближе к удобной позе»), не трогая основную: $(I - J^{+}J)(q_{rest} - q)$.
-- **Компенсация гравитации** в физическом режиме. Моторам подаётся момент, который «съела» бы гравитация, и рука перестаёт провисать.
+- **Adaptive damping.** If a step reduced the error, lower $\lambda$ and be bolder. If it didn't, roll back and raise $\lambda$. Classic Levenberg-Marquardt.
+- **Joint limits via an active set.** When a joint hits its limit, it's frozen for that step and the remaining joints re-solve the task. Plain clipping silently eats the progress and the solver gets stuck. I got stuck on exactly this before fixing it, lol.
+- **Stall detection and restarts.** If the error drops by less than 1% over 25 iterations, we're in a local minimum, so start over from a random configuration. The stall detector made the solver about 2.3x faster with zero accuracy loss.
+- **Null space.** The arm has 6 joints, and spare degrees of freedom can go toward a secondary goal ("stay close to a comfortable pose") without touching the main one: $(I - J^{+}J)(q_{rest} - q)$.
+- **Gravity compensation** in physics mode. The motors get fed the torque gravity would otherwise eat, so the arm stops sagging.
 
-## Бенчмарк 📊
+## Benchmark
 
-500 случайных достижимых 6D-поз, старт из домашней позы, допуск 0.1 мм / 0.06°. Чистый Python на обычном ноуте, так что время — это порядок величины, а не рекорд.
+500 random reachable 6D poses, starting from the home pose, tolerance 0.1 mm / 0.06 deg. Pure Python on a regular laptop, so read the timings as orders of magnitude, not world records.
 
-| Солвер | Успех | Медиана итераций | Время на решение |
+| Solver | Success | Median iterations | Time per solve |
 |---|---|---|---|
 | Jacobian transpose | 24.8% | 114 | ~37 ms |
 | Pseudo-inverse | 71.4% | 21 | ~12 ms |
-| DLS (Levenberg–Marquardt) | 71.6% | 21 | ~26 ms |
-| **DLS + 10 рестартов** | **99.6%** | 26 | ~50 ms |
+| DLS (Levenberg-Marquardt) | 71.6% | 21 | ~26 ms |
+| **DLS + 10 restarts** | **99.6%** | 26 | ~50 ms |
 
 ![convergence](assets/convergence.png)
 
-**Честный разбор, без инфоцыганства:**
+**The honest breakdown, no snake oil:**
 
-- На случайных целях pinv и DLS идут ноздря в ноздрю, обе сходятся квадратично. Около 28% поз недоступны из домашней позы: решение есть, но на другой «ветке» (локоть вверх/вниз, вывернутое запястье). Это лечат рестарты, а не формула шага.
-- DLS выигрывает там, где pinv психует, то есть **около сингулярностей**. Тест: тянем цель за предел досягаемости (рука вытягивается в струну) и обратно. У pinv средний рывок суставов **4.33°/кадр**, у DLS **1.27°/кадр**: в 3.4 раза плавнее, а итоговая ошибка 0.002 мм против 0.053 мм. На реальном железе это разница между «плавно» и «мотор сгорел».
-- При слежении за движущейся целью с тёплым стартом решение занимает ~2 итерации и <1 мс. Этого хватает для управления в реальном времени.
-- Физика: без компенсации гравитации рука отстаёт от цели в среднем на 21.6 мм, с компенсацией на **5.1 мм**.
+- On random targets, pinv and DLS are neck and neck, both converge quadratically. About 28% of poses aren't reachable from the home pose: a solution exists, but on a different "branch" (elbow up vs. down, flipped wrist). Restarts fix that, not a better step formula.
+- DLS wins where pinv panics: **near singularities**. Test: drag the target past the arm's reach (the arm goes fully straight) and back. Pinv averages **4.33 deg/frame** of joint jitter, DLS averages **1.27 deg/frame**. That's 3.4x smoother, and the final error is 0.002 mm vs. 0.053 mm. On real hardware, that's the difference between "smooth" and "burnt-out motor".
+- When tracking a moving target with a warm start, a solve takes ~2 iterations and under 1 ms. Plenty for real-time control.
+- Physics: without gravity compensation the arm lags the target by 21.6 mm on average, with it by **5.1 mm**.
 
-## Запуск 🚀
+## Running it
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Интерактивно, с физикой. Цель летает сама:
+Interactive, with physics. The target flies around on its own:
 
 ```bash
 python scripts/play.py --auto
 ```
 
-Или двигай цель сам: двойной клик по розовой сфере, потом **Ctrl + ПКМ** — двигать, **Ctrl + ЛКМ** — вращать.
+Or move the target yourself: double-click the pink sphere, then **Ctrl + right-drag** to move it, **Ctrl + left-drag** to rotate it.
 
 ```bash
 python scripts/play.py
 ```
 
-Тесты, бенчмарк и пересборка гифки:
+Tests, benchmark and regenerating the GIF:
 
 ```bash
 python -m pytest
@@ -110,47 +110,48 @@ python scripts/benchmark.py --n 500
 python scripts/render_gif.py
 ```
 
-## Чё где лежит
+## What's where
 
 ```
 armageddon/
-  kinematics.py   # SO(3), FK, якобиан, описание руки
-  ik.py           # три солвера, LM, active set, null space, рестарты
-  mjcf.py         # генерит MuJoCo-сцену из того же описания руки
-  trajectory.py   # восьмёрка для демки
+  kinematics.py   # SO(3), FK, Jacobian, the arm description
+  ik.py           # three solvers, LM, active set, null space, restarts
+  mjcf.py         # builds the MuJoCo scene from the same arm description
+  trajectory.py   # the figure-eight for the demo
 scripts/
-  play.py         # интерактив с физикой и компенсацией гравитации
-  benchmark.py    # табличка + график
-  render_gif.py   # гифка сверху
-tests/            # 75 тестов: FK/якобиан против MuJoCo, сходимость, лимиты
+  play.py         # interactive mode with physics and gravity compensation
+  benchmark.py    # the table + the plot
+  render_gif.py   # the GIF at the top
+tests/            # 75 tests: FK/Jacobian vs. MuJoCo, convergence, limits
 ```
 
-Модель руки собирается **из того же описания**, что и математика (`mjcf.py`). Поэтому симуляция и формулы физически не могут разъехаться, а тесты это подтверждают.
+The robot model is built **from the same description** as the math (`mjcf.py`). So the simulation and the formulas physically can't drift apart, and the tests confirm it.
 
-## Роадмап 🗺️
+## Roadmap
 
-Это первый проект из серии «physical AI с нуля»:
+This is the first project in a "physical AI from scratch" series:
 
-- [x] **ARMageddon**: IK, якобианы, управление
-- [ ] Pick-and-place по камере: детекция → оценка позиции → захват
-- [ ] Imitation learning: записываем демонстрации и учим политику (ACT / Diffusion Policy)
-- [ ] RL-локомоция: учим квадропеда ходить и не падать от пинка
-- [ ] Sim-to-real на настоящей SO-101 🦾
+- [x] **ARMageddon**: IK, Jacobians, control
+- [ ] Vision-based pick-and-place: detection, pose estimation, grasping
+- [ ] Imitation learning: record demonstrations and train a policy (ACT / Diffusion Policy)
+- [ ] RL locomotion: teach a quadruped to walk and not fall over when kicked
+- [ ] Sim-to-real on an actual SO-101 arm
 
 ## FAQ
 
-**Зачем писать своё, если есть готовые библиотеки?**
-Чтобы понимать, что происходит под капотом. Когда робот на реальном железе внезапно дёргается, «ну, библиотека так решила» — не ответ. А «у тебя рядом сингулярность, подними демпфирование» — ответ.
+**Why write your own when libraries exist?**
+To understand what's going on under the hood. When a robot suddenly jerks on real hardware, "well, the library decided so" isn't an answer. "You're near a singularity, crank up the damping" is.
 
-**Почему ARMageddon?**
-Потому что arm. Да, мы смеялись. Да, сами.
+**Why ARMageddon?**
+Because arm. Yes, I laughed. Yes, at my own joke.
 
-**Можно ли управлять настоящей рукой?**
-Солвер выдаёт углы суставов, их можно слать в сервы. Чтобы это было безопасно, нужны ещё ограничение скоростей, проверка коллизий и кнопка «СТОП» побольше. Это следующие шаги.
+**Can it control a real arm?**
+The solver outputs joint angles, and you can send those to servos. To make that safe you'd also want velocity limits, collision checking and a much bigger STOP button. Those are the next steps.
 
-**Почему код на английском, а README на русском?**
-Код читают все, а вайб — только свои.
+## License
+
+[MIT](LICENSE)
 
 ---
 
-*Сделано с ❤️, NumPy и примерно 0 вызовами `ikpy.solve()`.*
+*Made with NumPy and exactly zero calls to `ikpy.solve()`.*
