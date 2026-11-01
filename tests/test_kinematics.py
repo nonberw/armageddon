@@ -61,6 +61,22 @@ def test_log_map_roundtrip(angle):
                                rotation(axis, angle), atol=1e-6)
 
 
+def test_parallel_gripper_keeps_kinematics():
+    from armageddon.mjcf import ARM_MATERIALS, arm_actuators, arm_xml
+
+    xml = f"""<mujoco><compiler angle="radian" autolimits="true"/>
+      <asset>{ARM_MATERIALS}</asset>
+      <worldbody>{arm_xml(CHAIN, gripper="parallel")}</worldbody>
+      <actuator>{arm_actuators(CHAIN, gripper="parallel")}</actuator></mujoco>"""
+    model = mujoco.MjModel.from_xml_string(xml)
+    data = mujoco.MjData(model)
+    assert model.nu == CHAIN.dof + 2 and model.nq == CHAIN.dof + 2
+    q = RANDOM_QS[0]
+    data.qpos[:CHAIN.dof] = q
+    mujoco.mj_forward(model, data)
+    np.testing.assert_allclose(forward(CHAIN, q).pos, data.site_xpos[model.site("ee").id], atol=1e-9)
+
+
 @pytest.mark.parametrize("q", RANDOM_QS[:10])
 def test_quat_matches_mujoco(q):
     R = forward(CHAIN, q).rot

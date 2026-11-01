@@ -15,7 +15,7 @@
 - **The math matches MuJoCo to 1e-9** on random configurations. You don't have to take my word for it, the tests check it.
 - **99.6% success** on 500 random 6D poses (position + orientation).
 - **Real physics**: in interactive mode the arm is moved by motors under gravity. No teleporting.
-- **75 tests**, a benchmark and a convergence plot. Everything reproduces with one command.
+- **76 tests**, a benchmark and a convergence plot. Everything reproduces with one command.
 
 ## What even is this
 
@@ -96,6 +96,21 @@ Or move the target yourself: double-click the pink sphere, then **Ctrl + right-d
 python scripts/play.py
 ```
 
+Use it as a library in your own project (that's how the next projects in the series reuse it):
+
+```bash
+pip install git+https://github.com/nonberw/armageddon
+```
+
+```python
+from armageddon import default_arm, forward, solve
+from armageddon.mjcf import ARM_MATERIALS, arm_actuators, arm_xml  # same robot, your scene
+
+chain = default_arm()
+res = solve(chain, target_pos, target_rot, restarts=10)
+xml_bodies = arm_xml(chain, gripper="parallel")  # two slide-jointed fingers for real grasping
+```
+
 Tests, benchmark and regenerating the GIF:
 
 ```bash
@@ -122,7 +137,7 @@ scripts/
   play.py         # interactive mode with physics and gravity compensation
   benchmark.py    # the table + the plot
   render_gif.py   # the GIF at the top
-tests/            # 75 tests: FK/Jacobian vs. MuJoCo, convergence, limits
+tests/            # 76 tests: FK/Jacobian vs. MuJoCo, convergence, limits
 ```
 
 The robot model is built **from the same description** as the math (`mjcf.py`). So the simulation and the formulas physically can't drift apart, and the tests confirm it.

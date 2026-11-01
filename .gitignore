@@ -3,3 +3,5 @@ __pycache__/
 .pytest_cache/
 .venv/
 MUJOCO_LOG.TXT
+*.egg-info/
+build/
