@@ -147,7 +147,7 @@ The robot model is built **from the same description** as the math (`mjcf.py`). 
 This is the first project in a "physical AI from scratch" series:
 
 - [x] **ARMageddon**: IK, Jacobians, control
-- [ ] Vision-based pick-and-place: detection, pose estimation, grasping
+- [x] [YOINK](https://github.com/nonberw/yoink): vision-based pick-and-place, built on this library (810/810 cubes sorted)
 - [ ] Imitation learning: record demonstrations and train a policy (ACT / Diffusion Policy)
 - [ ] RL locomotion: teach a quadruped to walk and not fall over when kicked
 - [ ] Sim-to-real on an actual SO-101 arm
