@@ -148,8 +148,8 @@ This is the first project in a "physical AI from scratch" series:
 
 - [x] **ARMageddon**: IK, Jacobians, control
 - [x] [YOINK](https://github.com/nonberw/yoink): vision-based pick-and-place, built on this library (810/810 cubes sorted)
-- [ ] Imitation learning: record demonstrations and train a policy (ACT / Diffusion Policy)
-- [ ] RL locomotion: teach a quadruped to walk and not fall over when kicked
+- [x] [COPYCAT](https://github.com/nonberw/copycat): imitation learning from demonstrations (BC vs action chunking)
+- [x] [ZOOMIES](https://github.com/nonberw/zoomies): RL locomotion, a quadruped that walks and takes a kick
 - [ ] Sim-to-real on an actual SO-101 arm
 
 ## FAQ
