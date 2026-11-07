@@ -1,5 +1,10 @@
 # ARMageddon
 
+[![tests](https://github.com/nonberw/armageddon/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/nonberw/armageddon/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](requirements.txt)
+[![MuJoCo](https://img.shields.io/badge/physics-MuJoCo-0b7285.svg)](https://mujoco.org)
+
 > Inverse kinematics for a 6-DoF robot arm, **from scratch**. No ikpy, no off-the-shelf solvers, no "there's a function for that in ROS".
 > Just NumPy, linear algebra and a healthy amount of suffering.
 
